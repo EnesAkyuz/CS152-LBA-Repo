@@ -304,6 +304,10 @@ def handle_callback(call):
 def display_summary(message, user_id):
     session = user_sessions[user_id]
     answers = session['answers']
+    
+    city = answers.get("Select your city:")  # Get the selected city name from answers
+    city_coords = coordinates.get(city, {"Lat": 0, "Lng": 0})
+
     min_rating = answers.get("How many star ratings should the place have? ", "1")  # Default to "1" if not specified
     atmosphere = answers.get("Do you prefer a quiet or lively atmosphere?")
     internet_access = 'True' if answers.get("Do you require internet access?") == 'Yes' else 'False'
@@ -315,7 +319,8 @@ def display_summary(message, user_id):
     price_level_map = {"Free": 0, "Inexpensive": 1, "Moderate": 2, "Expensive": 3, "Very Expensive": 4}
     price_level = price_level_map.get(budget, 0)  # Default to 0 (Free) if not mapped
 
-    query = f"find_best_place({min_rating}, '{atmosphere}', {internet_access}, {power_outlet_access}, {food_availability}, {price_level}, Name, Rating)"
+    query = f"find_best_place({min_rating}, {float(city_coords['Lat'])}, {float(city_coords['Lng'])}, '{atmosphere}', {internet_access}, {power_outlet_access}, {food_availability}, {price_level}, Name, Rating)"
+    print(query)
     best_places = list(prolog.query(query))
     
     if best_places:
