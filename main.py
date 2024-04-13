@@ -330,7 +330,7 @@ def display_summary(message, user_id):
         response_text = f"Recommended places:\n"
         for place in best_places:
             try: 
-                chat_query += f"{place['Name']} with rating {place['Rating']}, "
+                chat_query = f"{place['Name']} with rating {place['Rating']}, "
                 if place['PlaceAtmosphere']:
                     chat_query += f"{place['PlaceAtmosphere']}, "
                 if place['PlaceInternetAccess']:
