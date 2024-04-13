@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import telebot
 import requests
 from pyswip.prolog import Prolog
-from sqlalchemy import create_engine, Column, String, Float, Integer, MetaData, UniqueConstraint
+from sqlalchemy import create_engine, Column, String, Float, Integer, MetaData, UniqueConstraint, JSON, Text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -14,7 +14,8 @@ load_dotenv()
 
 # keys
 BOT_TOKEN = os.getenv('T_TOKEN')
-API_KEY = os.getenv('G_API_KEY')
+G_API_KEY = os.getenv('G_API_KEY')
+API_KEY = os.getenv('OPENAI_API_KEY')
 
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -27,13 +28,9 @@ questions_and_options = {
     "Do you prefer a quiet or lively atmosphere?": ["Quiet", "Lively"],
     "Do you require internet access?": ["Yes", "No"],
     "Do you need access to power outlets?": ["Yes", "No"],
-    "Would you like to have the option to purchase food at the study spot? ": ["Yes", "No"],
-    "What is your budget for spending at a study spot?": ["Free", "<5$", "5-10$", ">10$"],
-    "How many star ratings should the study spot have? ": ["Any", "1", "2", "3", "4", "5"],
-    "How long do you plan to study?": ["<2 hrs", "2-4 hrs", "4+ hrs", "Not sure"],
-    "What are the modes of transport you prefer to use? ": ["Bus", "Train", "Bicycle", "Car", "No preference"],
-    "How much time do you have available for commuting?": ["<5 mins", "5-15 mins", "15-30 mins", ">30"],
-    "Is accessibility important to you? ": ["Yes", "No"]
+    "Would you like to have the option to purchase food at the place? ": ["Yes", "No"],
+    "What is your budget for spending?": ["Free", "Inexpensive", "Moderate", "Expensive", "Very Expensive"],
+    "How many star ratings should the place have? ": ["1", "2", "3", "4", "5"]
 }
 
 # Dictionary to hold user session data
@@ -50,12 +47,16 @@ class Place(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     rating = Column(Float)
-
-    # Add a unique constraint to prevent duplicate entries
-    __table_args__ = (UniqueConstraint('name', 'latitude', 'longitude', name='_name_location_uc'),)
+    photos = Column(JSON)  # Storing JSON data
+    description = Column(Text)
+    price_level = Column(Integer)  # Google's price level ranging from 0 (free) to 4 (very expensive)
+    atmosphere = Column(String)  # Quiet or Lively
+    internet_access = Column(Boolean)  # Yes or No
+    power_outlet_access = Column(Boolean)  # Yes or No
+    food_availability = Column(Boolean)  # Yes or No
 
     def __repr__(self):
-        return f"<Place(name={self.name}, latitude={self.latitude}, longitude={self.longitude}, rating={self.rating})>"
+        return f"<Place(name={self.name}, latitude={self.latitude}, longitude={self.longitude}, rating={self.rating}, price_level={self.price_level})>"
 
 # Create an engine
 engine = create_engine('sqlite:///places.db')
@@ -67,36 +68,133 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 
-def fetch_places_from_google_maps(type_of_place, location='46.8588443,2.2943506', radius=1000):
-    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={location}&radius={radius}&type={type_of_place}&key={API_KEY}"
-    response = requests.get(url)
+def fetch_place_details(place_id):
+    details_url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&key={G_API_KEY}"
+    response = requests.get(details_url)
     if response.status_code == 200:
-        return response.json().get('results', [])
-    return []
+        return response.json().get('result', {})
+    return {}
+
+def fetch_places_from_google_maps(type_of_place, location='48.8588443,2.2943506', radius=500):
+    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={location}&radius={radius}&type={type_of_place}&key={G_API_KEY}"
+    response = requests.get(url)
+    places = []
+    if response.status_code == 200:
+        results = response.json().get('results', [])
+        for place in results[:5]:
+            details = fetch_place_details(place['place_id'])
+            places.append(details)
+    return places
+
+def query_openai_for_attribute(prompt):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message['content'].strip()
+    except Exception as e:
+        print(e)
+        return str(e)
+
+def format_place_for_query(place):
+    # Extract necessary details to formulate a question context
+    name = place.get('name', 'This place')
+    address = place.get('vicinity', 'unknown address')
+    reviews = place.get('reviews', [])
+    review_excerpt = reviews[0]['text'] if reviews else 'No reviews available'
+    
+    # Construct a concise description of the place
+    place_description = f"{name} located at {address}. Notable review: {review_excerpt}"
+    return place_description
+
+def get_atmosphere(place):
+    place_description = format_place_for_query(place)
+    prompt = f"Is the atmosphere generally quiet or lively in the following place ['Quiet', 'Lively']?  {place_description}"
+    response = query_openai_for_attribute(prompt)
+    normalized_response = response.lower()
+    print("Atmosphere: ", normalized_response)
+    if "quiet" in normalized_response:
+        return "Quiet"
+    else:
+        return "Lively"
+
+def get_internet_access(place):
+    place_description = format_place_for_query(place)
+    prompt = f"Does this place offer internet access ['Yes', 'No']? {place_description}"
+    response = query_openai_for_attribute(prompt)
+    normalized_response = response.lower()
+    print("Internet: ", normalized_response)
+    if "yes" in normalized_response or "available" in normalized_response:
+        return True
+    else:
+        return False
+
+def get_power_outlets(place):
+    place_description = format_place_for_query(place)
+    prompt = f"Are there power outlets available for public use at the following place ['Yes', 'No']? {place_description}"
+    response = query_openai_for_attribute(prompt)
+    normalized_response = response.lower()
+    print("Outlets: ", normalized_response)
+    if "yes" in normalized_response or "available" in normalized_response:
+        return True
+    else:
+        return False
+
+def get_food_availability(place):
+    place_description = format_place_for_query(place)
+    prompt = f"Can visitors purchase food at the following place ['Yes', 'No']? {place_description}"
+    response = query_openai_for_attribute(prompt)
+    normalized_response = response.lower()
+    print("Food: ", normalized_response)
+    if "yes" in normalized_response or "available" in normalized_response:
+        return True
+    else:
+        return False
+
 
 def update_prolog_kb(prolog, places, session):
     for place in places:
-        name = place['name'].replace("'", '"')
+        name = place.get('name', '').replace("'", '"')
         lat = place['geometry']['location']['lat']
         lng = place['geometry']['location']['lng']
         rating = place.get('rating', 0)
+        photos = place.get('photos', [{}])[0].get('photo_reference', '')
+        description = place.get('description', '')
+        price_level = place.get('price_level', 0)  # Extract price level
+        atmosphere = get_atmosphere(place)
+        internet_access = get_internet_access(place)
+        power_outlet_access = get_power_outlets(place)
+        food_availability = get_food_availability(place)
 
-        # Check if place already exists
+        # Ensure existing places are updated or new entries are created
         existing_place = session.query(Place).filter_by(name=name, latitude=lat, longitude=lng).first()
         if existing_place:
-            if existing_place.rating != rating:
-                existing_place.rating = rating  # Update the rating if it has changed
+            if existing_place.rating != rating or existing_place.description != description:
+                existing_place.rating = rating
+                existing_place.photos = photos
+                existing_place.description = description
+                existing_place.price_level = price_level
+                existing_place.atmosphere = atmosphere
+                existing_place.internet_access = internet_access
+                existing_place.power_outlet_access = power_outlet_access
+                existing_place.food_availability = food_availability
                 session.add(existing_place)
         else:
-            # Place does not exist, so add it
-            place_entry = Place(name=name, latitude=lat, longitude=lng, rating=rating)
+            place_entry = Place(name=name, latitude=lat, longitude=lng, rating=rating, photos=photos,
+                                description=description, price_level=price_level, atmosphere=atmosphere,
+                                internet_access=internet_access, power_outlet_access=power_outlet_access, food_availability=food_availability)
             session.add(place_entry)
 
-        # Update Prolog KB as before or check if it needs updating too
-        command = f"assertz(place('{name}', {lat}, {lng}, {rating}))"
+        # Update Prolog if necessary
+        command = f"add_place('{name}', {lat}, {lng}, {rating}, '{atmosphere}', '{internet_access}', '{power_outlet_access}', '{food_availability}', {price_level}, '{photos}')"
+        print(command)
         next(prolog.query(command))
-    
+
     session.commit()  # Commit the session at the end
+
 
 
 def start_conversation(message):
@@ -166,25 +264,32 @@ def handle_callback(call):
 
 def display_summary(message, user_id):
     session = user_sessions[user_id]
-    response_text = "Here's the address you provided and your responses:\n\n"
-    response_text += f"Address: {session['answers'].get('Address', 'Not provided')}\n\n"
+    answers = session['answers']
+    min_rating = answers.get("How many star ratings should the place have? ", "1")  # Default to "1" if not specified
+    atmosphere = answers.get("Do you prefer a quiet or lively atmosphere?")
+    internet_access = 'True' if answers.get("Do you require internet access?") == 'Yes' else 'False'
+    power_outlet_access = 'True' if answers.get("Do you need access to power outlets?") == 'Yes' else 'False'
+    food_availability = 'True' if answers.get("Would you like to have the option to purchase food at the place? ") == 'Yes' else 'False'
+    budget = answers.get("What is your budget for spending?", "Inexpensive")  # Default to "Inexpensive" if not specified
+    
+    # Map budget answers to price levels if necessary (this part needs specific implementation details)
+    price_level_map = {"Free": 0, "Inexpensive": 1, "Moderate": 2, "Expensive": 3, "Very Expensive": 4}
+    price_level = price_level_map.get(budget, 0)  # Default to 0 (Free) if not mapped
 
-    best_places = list(prolog.query(f"find_best_place(3, Name, Rating)"))
+    query = f"find_best_place({min_rating}, '{atmosphere}', {internet_access}, {power_outlet_access}, {food_availability}, {price_level}, Name, Rating)"
+    best_places = list(prolog.query(query))
+    
     if best_places:
+        response_text = f"Recommended places:\n"
         for place in best_places:
-            print(f"Recommended Place: {place['Name']} with rating {place['Rating']}")
+            response_text += f"{place['Name']} with rating {place['Rating']}\n"
     else:
-        print("No places found with rating above or equal to:", 3)
+        response_text = "No places found with your preferences."
 
-    for question, answer in session['answers'].items():
-        if question != 'Address':
-            response_text += f"{question} \n {answer}\n\n"
-    
-    response_text += f"\n\n Recommended Place: {best_places[0]['Name']} with rating {best_places[0]['Rating']}"
-    
     bot.send_message(user_id, response_text)
     # Optionally clear the session data if no longer needed
     del user_sessions[user_id]
+
 
 
 @bot.message_handler(commands=['start'])
