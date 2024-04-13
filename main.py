@@ -25,6 +25,7 @@ def get_city_info(query):
     except Exception as e:
         return str(e)
 
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
     response_text = get_city_info(message.text)
