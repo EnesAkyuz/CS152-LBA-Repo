@@ -325,38 +325,40 @@ def display_summary(message, user_id):
     query = f"find_best_place({min_rating}, {float(city_coords['Lat'])}, {float(city_coords['Lng'])}, '{atmosphere}', {internet_access}, {power_outlet_access}, {food_availability}, {price_level}, Name, Rating)"
     print(query)
     best_places = list(prolog.query(query))
+
+    print("AAAA BEST", best_places)
     
     if best_places:
         response_text = f"Recommended places:\n"
         for place in best_places:
+            print("AAA", place)
             try: 
                 chat_query = f"{place['Name']} with rating {place['Rating']}, "
                 if place['PlaceAtmosphere']:
-                    chat_query += f"{place['PlaceAtmosphere']}, "
+                    chat_query += f"PlaceAtmosphere {place['PlaceAtmosphere']}, "
                 if place['PlaceInternetAccess']:
-                    chat_query += f"{place['PlaceInternetAccess']}, "
+                    chat_query += f"PlaceInternetAccess {place['PlaceInternetAccess']}, "
                 if place['PlacePowerOutletAccess']:
-                    chat_query += f"{place['PlacePowerOutletAccess']}, "
+                    chat_query += f"PlacePowerOutletAccess {place['PlacePowerOutletAccess']}, "
                 if place['PlaceFoodAvailability']:
-                    chat_query += f"{place['PlaceFoodAvailability']}"
+                    chat_query += f"PlaceFoodAvailabilityn{place['PlaceFoodAvailability']}"
                 if place['PlacePriceLevel']:
-                    chat_query += f"{place['PlacePriceLevel']}"
+                    chat_query += f"PlacePriceLevel {place['PlacePriceLevel']}"
                 chat_query += "\n"
-                try: 
-                    images = fetch_place_photos(place['Photos'])
-                except Exception as e:
-                    pass
+                
             except Exception as e:
                 pass
         try:
+            print(chat_query)
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are an assistant that has knowledge about various cities, at this point in the conversation I have already expressed me preferences for the type of place I am looking for and the city I am in. Now I want to create a message summarizing your findings which is this: {chat_query}, remember reply only with the response sent to the user as the text, avoid duplicates and if there are no places politely inform the user."}]
+                    {"role": "system", "content": f"Write a nice telegram text saying you recomend this place: {chat_query} in {city}"}
+                ]
             )
             response_text = response.choices[0].message['content'].strip()
-            response_text += f"images: {images}"
         except Exception as e:
+            print(e)
             response_text = 'I apologize, but I am unable to provide a response at this time.'
     else:
         response_text = "No places found with your preferences."
