@@ -2,21 +2,15 @@ import openai
 import os
 import telebot
 
+# keys
 BOT_TOKEN = os.getenv('T_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
-
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
-    bot.reply_to(message, "Hello! I am an echo bot. Send me any text and I will echo it back.")
+    bot.reply_to(message, "Hey Minervan! I am your study assistant. I recommend places in your rotation cities, please start by telling me your rotation city!")
 
-
-@bot.message_handler(func=lambda message: True)
-def echo_all(message):
-    bot.reply_to(message, message.text)
-
-
-openai.api_key = os.getenv('OPENAI_API_KEY')
 
 def get_city_info(query):
     try:
@@ -31,11 +25,10 @@ def get_city_info(query):
     except Exception as e:
         return str(e)
 
+@bot.message_handler(func=lambda message: True)
+def handle_message(message):
+    response_text = get_city_info(message.text)
+    bot.reply_to(message, response_text)
 
 if __name__ == "__main__":
     bot.polling()
-    while True:
-        user_query = input("What kind of place would you like to study today? (Type \"quit to quit\")")
-        if user_query.lower() == 'quit':
-            break
-        print("GPT-4:", get_city_info(user_query))
