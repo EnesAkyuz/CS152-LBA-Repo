@@ -10,7 +10,7 @@ list_places(PlacesList) :-
 
 %% Predicate to find the best place based on multiple criteria
 find_best_place(MinRating, Atmosphere, InternetAccess, PowerOutletAccess, FoodAvailability, PriceLevel, Name, Rating) :-
-    place(Name, _, _, Rating, PlaceAtmosphere, PlaceInternetAccess, PlacePowerOutletAccess, PlaceFoodAvailability, PlacePriceLevel, _),
+    place(Name, _, _, Rating, PlaceAtmosphere, PlaceInternetAccess, PlacePowerOutletAccess, PlaceFoodAvailability, PlacePriceLevel, Photos),
     nonvar(Rating),
     Rating >= MinRating,
     Atmosphere = PlaceAtmosphere,
