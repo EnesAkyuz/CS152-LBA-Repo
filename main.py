@@ -10,7 +10,7 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 # Questions and options for the menus
 questions_and_options = {
     "Select your city:": ["Seoul", "London", "Berlin", "Buenos Aires", "Hyderabad", "San Francisco", "Taipei"],
-    "Do you prefer a quiet or lively atmosphere?": ["Quiety", "Lively"],
+    "Do you prefer a quiet or lively atmosphere?": ["Quiet", "Lively"],
     "Do you require internet access?": ["Yes", "No"],
     "Do you need access to power outlets?": ["Yes", "No"],
     "Would you like to have the option to purchase food at the study spot? ": ["Yes", "No"],
