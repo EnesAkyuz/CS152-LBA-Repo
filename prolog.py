@@ -5,8 +5,9 @@ import tempfile, os
 from sqlalchemy import create_engine, Column, String, Float, Integer, MetaData, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
 
-API_KEY = 'AIzaSyClLbR7mDPLzvxMlm9YmC_wq7BataofN5A' 
+API_KEY = os.getenv('G_API_KEY')
 
 # Define the base class
 Base = declarative_base()

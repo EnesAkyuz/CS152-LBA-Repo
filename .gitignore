@@ -1,3 +1,4 @@
 /pyswip_env
 /myenv
 /__pycache__
+.env
