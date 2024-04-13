@@ -33,6 +33,38 @@ questions_and_options = {
     "How many star ratings should the place have? ": ["1", "2", "3", "4", "5"]
 }
 
+coordinates = {
+    "Seoul": {
+        "Lat": 37.5665,
+        "Lng": 126.9780,
+    },
+    "London": {
+        "Lat": 51.5074,
+        "Lng": -0.1278,
+    },
+    "Berlin": {
+        "Lat": 52.5200,
+        "Lng": 13.4050,
+    },
+    "Buenos Aires": {
+        "Lat": -34.6037,
+        "Lng": -58.3816,
+    },
+    "Hyderabad": {
+        "Lat": 17.3850,
+        "Lng": 78.4867,
+    },
+    "San Francisco": {
+        "Lat": 37.7749,
+        "Lng": -122.4194,
+    },
+    "Taipei": {
+        "Lat": 25.0330,
+        "Lng": 121.5654,
+    }
+}
+
+
 # Dictionary to hold user session data
 user_sessions = {}
 
@@ -75,8 +107,10 @@ def fetch_place_details(place_id):
         return response.json().get('result', {})
     return {}
 
-def fetch_places_from_google_maps(type_of_place, location='48.8588443,2.2943506', radius=500):
-    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={location}&radius={radius}&type={type_of_place}&key={G_API_KEY}"
+def fetch_places_from_google_maps(type_of_place, city):
+    city_coords = coordinates[city]
+    location = f"{city_coords['Lat']},{city_coords['Lng']}"
+    url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={location}&radius=500&type={type_of_place}&key={G_API_KEY}"
     response = requests.get(url)
     places = []
     if response.status_code == 200:
@@ -155,11 +189,12 @@ def get_food_availability(place):
         return False
 
 
-def update_prolog_kb(prolog, places, session):
+def update_prolog_kb(prolog, places, city, session):
+    city_coords = coordinates[city]
     for place in places:
         name = place.get('name', '').replace("'", '"')
-        lat = place['geometry']['location']['lat']
-        lng = place['geometry']['location']['lng']
+        lat = city_coords['Lat']
+        lng = city_coords['Lng']
         rating = place.get('rating', 0)
         photos = place.get('photos', [{}])[0].get('photo_reference', '')
         description = place.get('description', '')
@@ -234,10 +269,14 @@ def handle_callback(call):
     # Record the user's answer
     session['answers'][question] = call.data
 
+    if current_index == 0:
+        city = call.data
+        session['city'] = city
+
     if current_index == 1:
-        places = fetch_places_from_google_maps(call.data)
+        places = fetch_places_from_google_maps(call.data, session['city'])
         print(places)
-        update_prolog_kb(prolog, places, db_session)
+        update_prolog_kb(prolog, places, session['city'], db_session)
 
         result = list(prolog.query("list_places(PlacesList)"))
         if result:
