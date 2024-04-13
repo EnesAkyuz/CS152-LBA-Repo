@@ -3,9 +3,8 @@ import requests
 from pyswip.prolog import Prolog
 import tempfile, os
 from sqlalchemy import create_engine, Column, String, Float, Integer, MetaData, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
 
 API_KEY = os.getenv('G_API_KEY')
 
@@ -37,9 +36,10 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 
 
-def fetch_places_from_google_maps(type_of_place, location='46.8588443,2.2943506', radius=1000):
+def fetch_places_from_google_maps(type_of_place, location='51.529447,-0.097135', radius=1000):
     url = f"https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={location}&radius={radius}&type={type_of_place}&key={API_KEY}"
     response = requests.get(url)
+    print(response)
     if response.status_code == 200:
         return response.json().get('results', [])
     return []
@@ -72,6 +72,11 @@ def update_prolog_kb(prolog, places, session):
 
 def main():
     prolog = Prolog()
+
+
+
+    kb_path = os.path.abspath("kb.pl")
+    print(kb_path)
     
     # Consult KB
     kb_path = "kb.pl"
@@ -87,6 +92,7 @@ def main():
 
     type_of_place = input("Enter the type of place you are looking for (e.g., cafe, restaurant): ")
     places = fetch_places_from_google_maps(type_of_place)
+    print(places)
     if places:
         update_prolog_kb(prolog, places, session)
         min_rating = float(input("Enter the minimum acceptable rating (e.g., 4.5): "))
