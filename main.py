@@ -136,8 +136,9 @@ def handle_callback(call):
     # Record the user's answer
     session['answers'][question] = call.data
 
-    if current_index == 2:
+    if current_index == 1:
         places = fetch_places_from_google_maps(call.data)
+        print(places)
         update_prolog_kb(prolog, places, db_session)
 
         result = list(prolog.query("list_places(PlacesList)"))
