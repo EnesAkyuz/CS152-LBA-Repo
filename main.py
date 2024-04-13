@@ -99,6 +99,9 @@ Base.metadata.create_all(engine)
 # Create a sessionmaker bound to the engine
 Session = sessionmaker(bind=engine)
 
+def fetch_place_photos(photo_id):
+    photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={photo_id}&key={G_API_KEY}"
+    return photo_url
 
 def fetch_place_details(place_id):
     details_url = f"https://maps.googleapis.com/maps/api/place/details/json?place_id={place_id}&key={G_API_KEY}"
@@ -326,7 +329,25 @@ def display_summary(message, user_id):
     if best_places:
         response_text = f"Recommended places:\n"
         for place in best_places:
-            chat_query += f"{place['Name']} with rating {place['Rating']}\n"
+            try: 
+                chat_query += f"{place['Name']} with rating {place['Rating']}, "
+                if place['PlaceAtmosphere']:
+                    chat_query += f"{place['PlaceAtmosphere']}, "
+                if place['PlaceInternetAccess']:
+                    chat_query += f"{place['PlaceInternetAccess']}, "
+                if place['PlacePowerOutletAccess']:
+                    chat_query += f"{place['PlacePowerOutletAccess']}, "
+                if place['PlaceFoodAvailability']:
+                    chat_query += f"{place['PlaceFoodAvailability']}"
+                if place['PlacePriceLevel']:
+                    chat_query += f"{place['PlacePriceLevel']}"
+                chat_query += "\n"
+                try: 
+                    images = fetch_place_photos(place['Photos'])
+                except Exception as e:
+                    pass
+            except Exception as e:
+                pass
         try:
             response = openai.ChatCompletion.create(
                 model="gpt-3.5-turbo",
@@ -334,6 +355,7 @@ def display_summary(message, user_id):
                     {"role": "system", "content": "You are an assistant that has knowledge about various cities, at this point in the conversation I have already expressed me preferences for the type of place I am looking for and the city I am in. Now I want to create a message summarizing your findings which is this: {chat_query}, remember reply only with the response sent to the user as the text, avoid duplicates and if there are no places politely inform the user."}]
             )
             response_text = response.choices[0].message['content'].strip()
+            response_text += f"images: {images}"
         except Exception as e:
             response_text = 'I apologize, but I am unable to provide a response at this time.'
     else:
