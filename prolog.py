@@ -174,6 +174,7 @@ def update_prolog_kb(prolog, places, session):
 
     session.commit()
 
+
         
 
 def main():
